@@ -1,0 +1,35 @@
+# =============================================================================
+# .gitignore - k3s-cloudflared-deploy
+# =============================================================================
+
+# Secrets com dados sensíveis (NUNCA commitar)
+#**/*secret*.yaml
+
+# Arquivos de ambiente local
+.env
+.env.local
+*.env
+
+# Tokens e credenciais
+*token*
+*credentials*.json
+*.key
+*.pem
+
+# Logs e temporários
+*.log
+tmp/
+temp/
+*.tmp
+
+# IDE e editores
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Kubernetes temporários
+*.yaml~
+*.yml~
+

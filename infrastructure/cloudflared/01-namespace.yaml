@@ -1,0 +1,26 @@
+# =============================================================================
+# ARQUIVO: 01-namespace.yaml
+# PROJETO: lab
+# DESCRIÇÃO: Namespace para isolamento de recursos de infraestrutura
+# DOMÍNIO: lablocal.dpdns.org
+# TÚNEL: k3s-homelab
+# GERADO EM: 20260527_093103
+# =============================================================================
+# ⚠️  ESTE ARQUIVO FOI GERADO AUTOMATICAMENTE.
+#    Alterações manuais podem ser sobrescritas ao regerar.
+#    Para personalizar, edite após a geração ou modifique este script.
+# =============================================================================
+
+# ------------------------------------------------------------------------------
+# RECURSO: Namespace
+# OBJETIVO: Isolar recursos de infraestrutura (cloudflared, monitoring, etc.)
+#           dos aplicativos de negócio, facilitando RBAC, quotas e organização.
+# ------------------------------------------------------------------------------
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: infrastructure
+  labels:
+    name: infrastructure
+    managed-by: kustomize  # Indica que é gerenciado por GitOps (opcional)
+    cloudflared-enabled: "true"
