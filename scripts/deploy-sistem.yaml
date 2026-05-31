@@ -164,7 +164,7 @@ spec:
         - "--web.route-prefix=/prometheus"
         - "--web.external-url=https://lablocal.dpdns.org/prometheus"
         # Opcional: habilitar CORS se precisar
-        - "--web.enable-lifecycle"
+        #- "--web.enable-lifecycle"
         ports:
         - containerPort: 9090
         volumeMounts:
