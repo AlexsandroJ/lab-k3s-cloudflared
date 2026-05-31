@@ -1,102 +1,12 @@
-# =============================================================================
-# ARQUIVO: 03-configmap-cloudflared.yaml
-# PROJETO: lab
-# DESCRIÇÃO: ConfigMap com regras de ingress e configurações do cloudflared
-# DOMÍNIO: lablocal.dpdns.org
-# TÚNEL: k3s-homelab
-# GERADO EM: 20260527_093103
-# =============================================================================
-# ⚠️  ESTE ARQUIVO FOI GERADO AUTOMATICAMENTE.
-#    Alterações manuais podem ser sobrescritas ao regerar.
-#    Para personalizar, edite após a geração ou modifique este script.
-# =============================================================================
-
-# ------------------------------------------------------------------------------
-# RECURSO: ConfigMap
-# OBJETIVO: Definir configuração NÃO sensível do cloudflared:
-#   - Nome do túnel e arquivo de credenciais
-#   - Regras de ingress (roteamento hostname → serviço interno)
-#   - Configurações de log, métricas e comportamento
-#
-# VANTAGEM: Atualizações no ConfigMap recarregam o cloudflared dinamicamente
-#           (~15-30s) SEM necessidade de restart do pod.
-# ------------------------------------------------------------------------------
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: cloudflared-config
-  namespace: infrastructure
-  labels:
-    app: cloudflared
-    managed-by: generate-manifests.sh
+  #namespace: cloudflare-tunnel
 data:
   config.yaml: |
-    # ================================================================
-    # CONFIGURAÇÕES GERAIS DO TÚNEL
-    # ================================================================
-    
-    # Nome do túnel (DEVE coincidir com o criado no dashboard Cloudflare)
-    tunnel: k3s-lab-local
-    
-    # Caminho para o arquivo de credenciais (montado via Secret)
-    credentials-file: /etc/cloudflared/creds/credentials.json
-    
-    # ================================================================
-    # MONITORAMENTO, LOGS E COMPORTAMENTO
-    # ================================================================
-    
-    # Expõe métricas Prometheus e health checks na porta 2000
-    # Acessível apenas dentro do cluster ou via kubectl port-forward
     metrics: 0.0.0.0:2000
-    
-    # Desabilita autoupdate do binário cloudflared
-    # Motivo: Em Kubernetes, VOCÊ controla a versão via 'image:' no Deployment
-    no-autoupdate: true
-    
-    # Nível de log: debug | info | warn | error
-    # Use 'debug' apenas para troubleshooting; 'info' para produção
-    loglevel: info
-    
-    # Tempo de espera para conexões upstream (ajuste conforme necessidade)
-    connect-timeout: 30s
-    
-    # ================================================================
-    # REGRAS DE INGRESS (Roteamento de tráfego)
-    # Formato: hostname + path → serviço interno do Kubernetes
-    # Avaliação: SEQUENCIAL (primeiro match vence). Catch-all deve ser último.
-    # ================================================================
     ingress:
-      # ----------------------------------------------------------------
-      # REGRA 1: Aplicação principal
-      # ----------------------------------------------------------------
-      - hostname: "lablocal.dpdns.org"
-        service: http://exemplo-app-svc:80
-        path: /
-        # Opções avançadas (descomente se necessário):
-        # originRequest:
-        #   noTLSVerify: false          # Validar certificado do backend
-        #   connectTimeout: 10s         # Timeout específico para esta rota
-        #   httpHostHeader: "${HOST}"  # Preserva header Host original
-      
-      # ----------------------------------------------------------------
-      # REGRA 2: Health check dedicado (monitoramento externo)
-      # ----------------------------------------------------------------
-      - hostname: "health.dpdns.org"
-        service: http_status:200
-        # ↑ Responde sempre HTTP 200, sem depender da aplicação.
-        #   Útil para uptime monitors (UptimeRobot, Healthchecks.io, etc.)
-      
-      # ----------------------------------------------------------------
-      # REGRA 3: API (exemplo de sub-rota com path prefix)
-      # ----------------------------------------------------------------
-      # - hostname: "lablocal.dpdns.org"
-      #   service: http://api-svc:8080
-      #   path: /api
-      #   # ↑ Roteia apenas requisições para /api/* para o serviço de API
-      
-      # ----------------------------------------------------------------
-      # REGRA 4: Catch-all (SEGURANÇA - deve ser a ÚLTIMA regra)
-      # ----------------------------------------------------------------
-      - service: http_status:404
-        # ↑ Retorna 404 para qualquer hostname/path não mapeado.
-        #   Previne exposição acidental de serviços internos.
+    - hostname: api.seudominio.com
+      service: http://apivoltz.default.svc.cluster.local:3001
+    - service: http_status:404

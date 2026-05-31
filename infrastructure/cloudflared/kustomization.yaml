@@ -36,7 +36,7 @@ kind: Kustomization
 
 # Recursos a serem aplicados (ordem respeitada pelo kustomize)
 resources:
-  - 01-namespace.yaml
+# - 01-namespace.yaml
   - 02-secret-tunnel.yaml
   - 03-configmap-cloudflared.yaml
   - 04-deployment-cloudflared.yaml
@@ -47,7 +47,7 @@ commonLabels:
   project: cloudflared-tunnel
 
 # Namespace padrão para todos os recursos (redundante, mas explícito)
-namespace: infrastructure
+# namespace: infrastructure
 
 # Patches estratégicos (exemplo: ajustar réplicas por ambiente)
 # patches:

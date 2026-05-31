@@ -1,327 +1,9 @@
-# =============================================================================
-# ARQUIVO: manifests.yaml
-# PROJETO: lab
-# DESCRIÇÃO: Template de aplicação exemplo (Service + Deployment)
-# DOMÍNIO: lablocal.dpdns.org
-# TÚNEL: k3s-lab-local
-# GERADO EM: 20260527_093103
-# =============================================================================
-# ⚠️  ESTE ARQUIVO FOI GERADO AUTOMATICAMENTE.
-#    Alterações manuais podem ser sobrescritas ao regerar.
-#    Para personalizar, edite após a geração ou modifique este script.
-# =============================================================================
 
-# ------------------------------------------------------------------------------
-# RECURSO: Service + Deployment (template de aplicação)
-# OBJETIVO: Exemplo de como estruturar SUA aplicação para ser acessível
-#           via Cloudflare Tunnel.
-#
-# INSTRUÇÕES:
-#   1. Copie este arquivo para apps/<seu-app>/manifests.yaml
-#   2. Substitua 'exemplo-app' pelo nome da sua aplicação
-#   3. Ajuste imagem, portas, recursos e variáveis de ambiente
-#   4. Adicione uma regra correspondente no ConfigMap do cloudflared
-# ------------------------------------------------------------------------------
-
-# MOSQUITTO CONFIG
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: mosquitto-config
-  namespace: infrastructure
-data:
-  mosquitto.conf: |
-    # Listener TCP padrão (para dispositivos IoT, mosquitto_pub/sub)
-    listener 1883
-    allow_anonymous true
-    
-    # Listener WebSocket para navegadores (HiveMQ Demo)
-    listener 8083
-    protocol websockets
-    allow_anonymous true
-    
-    # Logs e persistência
-    log_type all
-    log_dest stdout
-    persistence false
----
-# MOSQUITTO DEPLOYMENT
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: mosquitto
-  namespace: infrastructure
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: mosquitto
-  template:
-    metadata:
-      labels:
-        app: mosquitto
-    spec:
-      containers:
-      - name: mosquitto
-        image: docker.io/library/eclipse-mosquitto:latest
-        imagePullPolicy: IfNotPresent
-        ports:
-        - containerPort: 1883
-        volumeMounts:
-        - name: config
-          mountPath: /mosquitto/config/mosquitto.conf
-          subPath: mosquitto.conf
-        resources:
-          requests: { cpu: 100m, memory: 256Mi }
-          limits:   { cpu: 200m, memory: 256Mi }
-      volumes:
-      - name: config
-        configMap:
-          name: mosquitto-config
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: mosquitto
-  namespace: infrastructure
-spec:
-  type: LoadBalancer
-  selector:
-    app: mosquitto
-  ports:
-  - name: mqtt
-    protocol: TCP
-    port: 1883
-    targetPort: 1883
-  - name: websocket
-    protocol: TCP
-    port: 8083
-    targetPort: 8083
----
-# EXPORTER DEPLOYMENT
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: mosquitto-exporter
-  namespace: infrastructure
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: mosquitto-exporter
-  template:
-    metadata:
-      labels:
-        app: mosquitto-exporter
-    spec:
-      containers:
-      - name: exporter
-        image: docker.io/sapcc/mosquitto-exporter:0.8.0
-        imagePullPolicy: IfNotPresent
-        args:
-        - "-e=tcp://mosquitto:1883"
-        - "-b=0.0.0.0:9234"
-        ports:
-        - containerPort: 9234
-        startupProbe:
-          httpGet: { path: /metrics, port: 9234 }
-          failureThreshold: 20
-          periodSeconds: 3
-        resources:
-          requests: { cpu: 100m, memory: 256Mi }
-          limits:   { cpu: 200m, memory: 256Mi }
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: mosquitto-exporter
-  namespace: infrastructure
-spec:
-  type: LoadBalancer
-  selector:
-    app: mosquitto-exporter
-  ports:
-  - protocol: TCP
-    port: 9234
-    targetPort: 9234
----
-# PROMETHEUS CONFIG
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: prometheus-config
-  namespace: infrastructure
-data:
-  prometheus.yml: |
-    global:
-      scrape_interval: 10s
-    scrape_configs:
-      - job_name: 'mosquitto-exporter'
-        metrics_path: '/metrics'
-        static_configs:
-          - targets: ['mosquitto-exporter:9234']
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: prometheus
-  namespace: infrastructure
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: prometheus
-  template:
-    metadata:
-      labels:
-        app: prometheus
-    spec:
-      containers:
-      - name: prometheus
-        image: docker.io/prom/prometheus:latest
-        imagePullPolicy: IfNotPresent
-        args:
-        - "--config.file=/etc/prometheus/prometheus.yml"
-        - "--storage.tsdb.path=/prometheus"
-        - "--storage.tsdb.retention.time=24h"
-        ports:
-        - containerPort: 9090
-        volumeMounts:
-        - name: config
-          mountPath: /etc/prometheus/prometheus.yml
-          subPath: prometheus.yml
-        - name: data
-          mountPath: /prometheus
-        resources:
-          requests: { cpu: 100m, memory: 256Mi }
-          limits:   { cpu: 200m, memory: 256Mi }
-      volumes:
-      - name: config
-        configMap:
-          name: prometheus-config
-      - name: data
-        persistentVolumeClaim:
-          claimName: prometheus-data
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: prometheus
-  namespace: infrastructure
-spec:
-  type: LoadBalancer
-  selector:
-    app: prometheus
-  ports:
-  - protocol: TCP
-    port: 9090
-    targetPort: 9090
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: prometheus-data
-  namespace: infrastructure  # ← Corrigido: adicionado namespace
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
----
-# GRAFANA DATASOURCE PROVISIONING
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: grafana-datasources
-  namespace: infrastructure
-data:
-  datasource.yml: |
-    apiVersion: 1
-    datasources:
-      - name: Prometheus
-        type: prometheus
-        access: proxy
-        url: http://prometheus:9090
-        isDefault: true
-        editable: false
----
-# GRAFANA DEPLOYMENT
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: grafana
-  namespace: infrastructure
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: grafana
-  template:
-    metadata:
-      labels:
-        app: grafana
-    spec:
-      containers:
-      - name: grafana
-        image: docker.io/grafana/grafana:latest
-        imagePullPolicy: IfNotPresent
-        env:
-        - name: GF_SECURITY_ADMIN_PASSWORD
-          value: "admin"
-        - name: GF_USERS_ALLOW_SIGN_UP
-          value: "false"
-        - name: GF_ANALYTICS_REPORTING_ENABLED
-          value: "false"
-        ports:
-        - containerPort: 3000
-        volumeMounts:
-        - name: datasources
-          mountPath: /etc/grafana/provisioning/datasources
-        - name: grafana-data
-          mountPath: /var/lib/grafana
-        resources:
-          requests: { cpu: 500m, memory: 1Gi }
-          limits:   { cpu: 900m, memory: 1Gi }
-      volumes:
-      - name: datasources
-        configMap:
-          name: grafana-datasources
-      - name: grafana-data
-        persistentVolumeClaim:
-          claimName: grafana-storage
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: grafana-storage
-  namespace: infrastructure  # ← Corrigido: adicionado namespace
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: grafana
-  namespace: infrastructure
-spec:
-  type: LoadBalancer
-  selector:
-    app: grafana
-  ports:
-  - protocol: TCP
-    port: 3000
-    targetPort: 3000
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: mongo-data
-  namespace: infrastructure  # ← Corrigido: adicionado namespace
+  #namespace: infrastructure  # ← Corrigido: adicionado namespace
 spec:
   accessModes:
     - ReadWriteOnce
@@ -334,7 +16,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mongo
-  namespace: infrastructure
+  #namespace: infrastructure
 spec:
   replicas: 1
   selector:
@@ -367,7 +49,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: mongo
-  namespace: infrastructure
+  #namespace: infrastructure
 spec:
   type: LoadBalancer
   selector:
@@ -382,7 +64,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: express
-  namespace: infrastructure
+  #namespace: infrastructure
 spec:
   replicas: 1
   selector:
@@ -414,7 +96,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: express
-  namespace: infrastructure
+  #namespace: infrastructure
 spec:
   type: LoadBalancer
   selector:
@@ -429,7 +111,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: apivoltz
-  namespace: infrastructure
+  #namespace: infrastructure
 spec:
   replicas: 1
   selector:
@@ -479,7 +161,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: apivoltz
-  namespace: infrastructure
+  #namespace: infrastructure
 spec:
   type: LoadBalancer
   selector:

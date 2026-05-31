@@ -1,184 +1,37 @@
-# =============================================================================
-# ARQUIVO: 04-deployment-cloudflared.yaml
-# PROJETO: lab
-# DESCRIÇÃO: Deployment do cloudflared com health checks e recursos
-# DOMÍNIO: lablocal.dpdns.org
-# TÚNEL: k3s-homelab
-# GERADO EM: 20260527_093103
-# =============================================================================
-# ⚠️  ESTE ARQUIVO FOI GERADO AUTOMATICAMENTE.
-#    Alterações manuais podem ser sobrescritas ao regerar.
-#    Para personalizar, edite após a geração ou modifique este script.
-# =============================================================================
-
-# ------------------------------------------------------------------------------
-# RECURSO: Deployment (apps/v1)
-# OBJETIVO: Orquestrar pods do cloudflared com:
-#   - Alta disponibilidade (múltiplas réplicas)
-#   - Health checks (liveness/readiness probes)
-#   - Limites de recursos (evita "noisy neighbor")
-#   - Estratégia de update sem downtime (RollingUpdate)
-#
-# COMPORTAMENTO: 
-#   - Se um pod falhar, Kubernetes reinicia automaticamente (self-healing)
-#   - Atualizações de imagem/config são aplicadas gradualmente (zero downtime)
-# ------------------------------------------------------------------------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: cloudflared
-  namespace: infrastructure
-  labels:
-    app: cloudflared
-    managed-by: generate-manifests.sh
+  #namespace: cloudflare-tunnel
 spec:
-  # Estratégia de rollout (padrão: RollingUpdate)
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1           # Pode criar 1 pod extra durante update
-      maxUnavailable: 0     # Garante que SEMPRE haja pelo menos 1 pod ativo
-  
-  # Número de réplicas para alta disponibilidade
-  # Ajuste conforme criticidade: 1 para dev, 2+ para produção
   replicas: 2
-  
-  # Selector: identifica quais pods este Deployment gerencia
   selector:
     matchLabels:
       app: cloudflared
-  
-  # Template: modelo para criação de novos pods
   template:
     metadata:
       labels:
         app: cloudflared
-        # Labels adicionais para monitoramento/organização
-        component: tunnel
-        environment: production  # Altere para 'staging'/'dev' conforme ambiente
     spec:
-      # Segurança: evita que pods sejam escalonados em nós inadequados
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                  - cloudflared
-              topologyKey: kubernetes.io/hostname
-      # ↑ Tenta distribuir réplicas em nós diferentes (melhor resiliência)
-      
       containers:
-        - name: cloudflared
-          # Imagem oficial da Cloudflare (use tag específica em produção)
-          image: cloudflare/cloudflared:latest
-          
-          # Política de pull de imagem (Always garante versão mais recente)
-          imagePullPolicy: IfNotPresent
-          
-          # Argumentos de inicialização do binário cloudflared
-          args:
-            - tunnel
-            - --config
-            - /etc/cloudflared/config/config.yaml
-            - run
-          
-          # Variáveis de ambiente
-          env:
-            # Token de autenticação (injetado via Secret)
-            - name: TUNNEL_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: cloudflared-credentials
-                  key: token
-            # Variáveis para debugging/monitoramento (opcionais)
-            - name: CLOUDFLARED_METRICS
-              value: "0.0.0.0:2000"
-          
-          # Portas expostas pelo container (apenas para comunicação interna)
-          ports:
-            - containerPort: 2000
-              name: metrics
-              protocol: TCP
-          
-          # Health Checks: Kubernetes monitora saúde do container
-          
-          # Liveness Probe: "O container está travado? Se sim, reinicia."
-          livenessProbe:
-            httpGet:
-              path: /ready
-              port: metrics
-              scheme: HTTP
-            initialDelaySeconds: 15   # Aguarda 15s após start para primeira checagem
-            periodSeconds: 10         # Verifica a cada 10 segundos
-            timeoutSeconds: 5         # Timeout por tentativa
-            successThreshold: 1       # 1 sucesso = considerado saudável
-            failureThreshold: 3       # 3 falhas consecutivas = reinicia container
-          
-          # Readiness Probe: "O container está pronto para tráfego?"
-          readinessProbe:
-            httpGet:
-              path: /ready
-              port: metrics
-              scheme: HTTP
-            initialDelaySeconds: 5    # Começa a verificar mais cedo que liveness
-            periodSeconds: 5
-            timeoutSeconds: 3
-            successThreshold: 1
-            failureThreshold: 3
-          # ↑ Enquanto readiness falha: pod não recebe tráfego de Services
-          
-          # Recursos: limites de CPU/memória (evita consumo excessivo)
-          resources:
-            requests:                 # Recursos GARANTIDOS (reserva no nó)
-              memory: "64Mi"
-              cpu: "50m"              # 50 milicpus = 0.05 núcleo
-            limits:                   # Recursos MÁXIMOS permitidos
-              memory: "128Mi"
-              cpu: "100m"
-          
-          # Security Context: boas práticas de segurança para container
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            runAsNonRoot: true
-            runAsUser: 10001          # Usuário não-privilegiado (padrão da imagem)
-            capabilities:
-              drop:
-                - ALL                 # Remove todas as capabilities Linux
-          
-          # Volume Mounts: conecta volumes externos ao filesystem do container
-          volumeMounts:
-            - name: config-volume
-              mountPath: /etc/cloudflared/config
-              readOnly: true
-            - name: creds-volume
-              mountPath: /etc/cloudflared/creds
-              readOnly: true
-            # Volume temporário para logs (evita escrita em rootfs)
-            - name: tmp-volume
-              mountPath: /tmp
-              readOnly: false
-      
-      # Volumes: define fontes dos dados montados nos volumeMounts
+      - name: cloudflared
+        image: cloudflare/cloudflared:latest
+        args:
+        - tunnel
+        - --config
+        - /etc/cloudflared/config/config.yaml
+        - run
+        env:
+        - name: TUNNEL_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: cloudflared-token
+              key: TUNNEL_TOKEN
+        volumeMounts:
+        - name: config
+          mountPath: /etc/cloudflared/config
+          readOnly: true
       volumes:
-        - name: config-volume
-          configMap:
-            name: cloudflared-config
-            defaultMode: 0444         # Permissão: apenas leitura (r--r--r--)
-            items:
-              - key: config.yaml
-                path: config.yaml
-        - name: creds-volume
-          secret:
-            secretName: cloudflared-credentials
-            defaultMode: 0400         # Permissão: apenas owner lê (r--------)
-            items:
-              - key: token
-                path: credentials.json
-        - name: tmp-volume
-          emptyDir: {}                # Volume efêmero em memória/tmpfs
+      - name: config
+        configMap:
+          name: cloudflared-config
