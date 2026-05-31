@@ -23,7 +23,6 @@
 #   4. Adicione uma regra correspondente no ConfigMap do cloudflared
 # ------------------------------------------------------------------------------
 
-
 # MOSQUITTO CONFIG
 apiVersion: v1
 kind: ConfigMap
@@ -94,7 +93,7 @@ spec:
     protocol: TCP
     port: 1883
     targetPort: 1883
-  - name: websocket  # ← NOVO
+  - name: websocket
     protocol: TCP
     port: 8083
     targetPort: 8083
@@ -222,6 +221,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: prometheus-data
+  namespace: infrastructure  # ← Corrigido: adicionado namespace
 spec:
   accessModes:
     - ReadWriteOnce
@@ -290,19 +290,18 @@ spec:
       - name: grafana-data
         persistentVolumeClaim:
           claimName: grafana-storage
-
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: grafana-storage
+  namespace: infrastructure  # ← Corrigido: adicionado namespace
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 1Gi
-
 ---
 apiVersion: v1
 kind: Service
@@ -317,21 +316,20 @@ spec:
   - protocol: TCP
     port: 3000
     targetPort: 3000
-
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: mongo-data
+  namespace: infrastructure  # ← Corrigido: adicionado namespace
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 2Gi
-
-# MongoDB Deployment + Service
 ---
+# MongoDB Deployment + Service
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -364,7 +362,6 @@ spec:
         - name: mongo-data
           persistentVolumeClaim:
             claimName: mongo-data
-
 ---
 apiVersion: v1
 kind: Service
@@ -379,9 +376,8 @@ spec:
     - protocol: TCP
       port: 27017
       targetPort: 27017
-
-# Mongo Express
 ---
+# Mongo Express
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -413,7 +409,6 @@ spec:
               value: "root"
             - name: ME_CONFIG_MONGODB_AUTH_PASSWORD
               value: "example"
-
 ---
 apiVersion: v1
 kind: Service
@@ -428,9 +423,8 @@ spec:
     - protocol: TCP
       port: 8081
       targetPort: 8081
-
-# API Node.js
 ---
+# API Node.js
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -448,7 +442,7 @@ spec:
     spec:
       containers:
         - name: apivoltz
-          image: alexsandrojsilva0/apivoltz:latest # Substitua
+          image: alexsandrojsilva0/apivoltz:latest
           ports:
             - containerPort: 3001
           env:
@@ -480,7 +474,6 @@ spec:
               value: "mqtt://mosquitto:1883"
             - name: MQTT_TOPIC
               value: "moto/telemetria"
-
 ---
 apiVersion: v1
 kind: Service
@@ -495,5 +488,3 @@ spec:
     - protocol: TCP
       port: 3001
       targetPort: 3001
-
-
