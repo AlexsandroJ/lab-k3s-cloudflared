@@ -32,6 +32,7 @@
 nano lab-k3s-cloudflared/infrastructure/cloudflared/02-secret-tunnel.yaml
 
 # 3. Execute o deploy
+chmod +x ./scripts/deploy.sh
 ./scripts/deploy.sh
 ```
 
