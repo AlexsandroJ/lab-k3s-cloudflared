@@ -160,6 +160,11 @@ spec:
         - "--config.file=/etc/prometheus/prometheus.yml"
         - "--storage.tsdb.path=/prometheus"
         - "--storage.tsdb.retention.time=24h"
+         # ✅ Flags CRÍTICAS para subpath:
+        - "--web.route-prefix=/prometheus"
+        - "--web.external-url=https://lablocal.dpdns.org/prometheus"
+        # Opcional: habilitar CORS se precisar
+        - "--web.enable-lifecycle"
         ports:
         - containerPort: 9090
         volumeMounts:
@@ -242,6 +247,10 @@ spec:
         image: docker.io/grafana/grafana:latest
         imagePullPolicy: IfNotPresent
         env:
+        - name: GF_SERVER_SERVE_FROM_SUB_PATH
+          value: "true"
+        - name: GF_SERVER_ROOT_URL
+          value: "https://lablocal.dpdns.org/grafana"
         - name: GF_SECURITY_ADMIN_PASSWORD
           value: "admin"
         - name: GF_USERS_ALLOW_SIGN_UP
